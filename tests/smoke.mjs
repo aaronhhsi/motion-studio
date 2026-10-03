@@ -917,15 +917,33 @@ async function main() {
   check('rescanned landmarks map back to full-frame coordinates', rescan.inRange === true);
 
   // --- 8b. left/right swap correction ------------------------------------
+  // A clean track must never be "corrected" — a false positive would silently
+  // corrupt good data, which is worse than the bug.
+  const cleanPass = await cdp.eval(`(async () => {
+    const SIDES = await import('/js/sides.js');
+    const r = SIDES.detectSideFlips(window.motionStudio.clipB.track);
+    return { segments: r.segments.length, frames: window.motionStudio.clipB.track.length };
+  })()`);
+  check('a clean clip is left alone', cleanPass.segments === 0,
+    `${cleanPass.segments} runs flagged across ${cleanPass.frames} frames`);
+
   // The model labels limbs anatomically and can swap left for right mid-clip
   // (a rotating server does it reliably). Inject that into a real track and
   // check the app puts it back, reversibly, without touching anything else.
+  //
+  // Clip B, not A: A's frames 10-25 were just replaced by a rescan with a
+  // different model inside a brightened box, so a run injected there would
+  // straddle a seam between two models' outputs — and whether the joints
+  // "moved" across that seam depends on how much the two models happen to
+  // disagree on a given machine. It passed on Windows and failed on Linux CI.
+  // B is one model's track end to end, so the only discontinuity is the
+  // injected one.
   const sideFix = await cdp.eval(`(async () => {
     const SIDES = await import('/js/sides.js');
     const SK = await import('/js/skeleton.js');
     const ms = window.motionStudio;
-    ms.setActiveClip(ms.clipA);
-    const c = ms.clipA;
+    ms.setActiveClip(ms.clipB);
+    const c = ms.clipB;
 
     // start from the app's own corrected track
     const raw = c.track.frames.map((f) => f.pose ? f.pose[SK.L.RIGHT_WRIST].x : null);
@@ -963,7 +981,7 @@ async function main() {
   const roundTrip = await cdp.eval(`(async () => {
     const SK = await import('/js/skeleton.js');
     const ms = window.motionStudio;
-    const c = ms.clipA;
+    const c = ms.clipB;
     const corrected = c.track.frames.map((f) => f.pose ? f.pose[SK.L.RIGHT_WRIST].x : null);
     const chk = document.querySelector('#fixSidesChk');
 
@@ -989,16 +1007,6 @@ async function main() {
   check('the panel says when correction is off', /Off —/.test(roundTrip.offNote), roundTrip.offNote);
   check('timeline flags clear when correction is off', roundTrip.offMarks === 0,
     `${roundTrip.offMarks} marks while off`);
-
-  // A clean track must never be "corrected" — a false positive would silently
-  // corrupt good data, which is worse than the bug.
-  const cleanPass = await cdp.eval(`(async () => {
-    const SIDES = await import('/js/sides.js');
-    const r = SIDES.detectSideFlips(window.motionStudio.clipB.track);
-    return { segments: r.segments.length, frames: window.motionStudio.clipB.track.length };
-  })()`);
-  check('a clean clip is left alone', cleanPass.segments === 0,
-    `${cleanPass.segments} runs flagged across ${cleanPass.frames} frames`);
 
   // --- 8c. exporting the cropped, trimmed clip as video -------------------
   const exported = await cdp.eval(`(async () => {

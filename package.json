@@ -1,0 +1,21 @@
+{
+  "name": "motion-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser-based body tracking: mark joints on video, image or a live camera and study how they move.",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "dev": "node scripts/serve.mjs",
+    "vendor": "node scripts/vendor.mjs",
+    "test": "node tests/logic.test.mjs && node tests/dom-contract.test.mjs",
+    "test:smoke": "node tests/smoke.mjs",
+    "test:firefox": "node tests/firefox.mjs",
+    "test:network": "node tests/network.mjs",
+    "test:all": "npm test && npm run test:smoke && npm run test:firefox && npm run test:network && npm run test:clip",
+    "test:clip": "node tests/real-clip.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

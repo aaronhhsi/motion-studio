@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Motion Studio — body tracking</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true"></span>
+    <div>
+      <h1>Motion Studio</h1>
+      <p>pose tracking &amp; form review</p>
+    </div>
+  </div>
+
+  <div class="status" id="status"><span class="dot"></span><span id="statusText">starting…</span></div>
+</header>
+
+<main class="layout">
+  <section class="stage-col">
+    <!-- One or two ClipViews are appended here, each with its own canvas,
+         transport and timeline. -->
+    <div class="clips" id="clips">
+    </div>
+
+    <div class="global-transport" id="globalTransport" hidden>
+      <button class="btn primary" id="playBoth">▶ Play both</button>
+      <button class="btn" id="syncBoth" title="Move B to A's position within its own trim">Match position</button>
+      <span class="spacer"></span>
+      <span class="hint">Click a clip to make it active — the sidebar follows it.</span>
+    </div>
+  </section>
+
+  <aside class="sidebar">
+
+    <details class="panel" open>
+      <summary>Source</summary>
+
+      <div class="panel-body">
+        <div class="row">
+          <button class="btn primary" id="pickVideo">Choose video…</button>
+          <button class="btn" id="reanalyze" disabled>Re-analyse</button>
+        </div>
+        <input type="file" id="videoInput" accept="video/*" hidden>
+        <div class="row">
+          <button class="btn" id="pickVideoB">Compare with…</button>
+          <button class="btn ghost" id="closeVideoB" disabled>Close B</button>
+        </div>
+        <input type="file" id="videoInputB" accept="video/*" hidden>
+        <p class="note" id="videoNote">MP4, WebM or MOV. Drag a file onto the stage too. Everything runs locally in your browser.</p>
+      </div>
+    </details>
+
+    <details class="panel" open>
+      <summary>Tracking</summary>
+      <div class="panel-body">
+        <label class="field">
+          <span>Model</span>
+          <select id="modelSel"></select>
+        </label>
+        <label class="field">
+          <span>Sample rate</span>
+          <select id="fpsSel">
+            <option value="15">15 fps</option>
+            <option value="24">24 fps</option>
+            <option value="30" selected>30 fps</option>
+            <option value="60">60 fps</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Smoothing <b id="smoothVal">0.35</b></span>
+          <input type="range" id="smoothRange" min="0" max="1" step="0.05" value="0.35">
+        </label>
+        <label class="field">
+          <span>Min visibility <b id="visVal">0.40</b></span>
+          <input type="range" id="visRange" min="0" max="0.9" step="0.05" value="0.4">
+        </label>
+        <label class="chk"><input type="checkbox" id="handsChk"> track fingers — 21 points per hand</label>
+        <label class="chk"><input type="checkbox" id="fixSidesChk" checked> keep left/right consistent</label>
+        <div class="row wrap">
+          <button class="btn sm" id="swapSidesBtn" disabled>Swap L/R: whole clip</button>
+          <button class="btn sm" id="swapFromHereBtn" disabled>…from here on</button>
+        </div>
+        <p class="note" id="sidesNote">The model labels limbs anatomically and can exchange left for right partway through a clip. Corrected runs are flagged in amber on the timeline.</p>
+        <label class="chk"><input type="checkbox" id="mirrorChk"> mirror horizontally</label>
+        <p class="note" id="handsNote">Body tracking gives four coarse points per hand. Finger tracking adds a second model — more detail, roughly half the frame rate.</p>
+      </div>
+    </details>
+
+    <details class="panel" open>
+      <summary>Crop &amp; rescan</summary>
+      <div class="panel-body">
+        <p class="note">Draw a box on the active clip, then either crop the view to it or re-run detection inside it.</p>
+        <div class="row">
+          <button class="btn" id="selectArea" disabled>Select area</button>
+          <button class="btn ghost" id="clearSelection" disabled>Clear box</button>
+        </div>
+        <div class="row">
+          <button class="btn" id="applyCrop" disabled>Crop to box</button>
+          <button class="btn ghost" id="clearCrop" disabled>Uncrop</button>
+        </div>
+        <label class="field">
+          <span>Model for rescan</span>
+          <select id="rescanModelSel"></select>
+        </label>
+        <label class="field">
+          <span>Exposure for rescan <b id="boostVal">1.0×</b></span>
+          <input type="range" id="boostRange" min="1" max="2.5" step="0.1" value="1">
+        </label>
+        <div class="row">
+          <button class="btn primary" id="rescanBtn" disabled>Rescan inside box</button>
+        </div>
+        <p class="note" id="cropNote">Rescan covers the box in space and the <b>trimmed range</b> in time, and replaces only those frames.</p>
+        <p class="note" id="rescanNote">It helps most when the subject is too small or too dim for the full frame to find at all, or when the wrong person is picked. If the subject is already tracked, expect little change — the model already crops to whoever it detected. For finer elbows and wrists, the heavy model is the bigger lever.</p>
+      </div>
+    </details>
+
+    <details class="panel" open>
+      <summary>Focus scan</summary>
+      <div class="panel-body">
+        <p class="note">Watches the clip from the playhead, then locks onto whichever of the chosen points it can actually see — and tracks only those.</p>
+        <label class="field">
+          <span>Lock onto</span>
+          <select id="focusTarget"></select>
+        </label>
+        <div class="row">
+          <label class="field tight">
+            <span>Scan for</span>
+            <select id="scanLenSel">
+              <option value="0.75">0.75 s</option>
+              <option value="1.5" selected>1.5 s</option>
+              <option value="3">3 s</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <button class="btn primary" id="scanBtn">◎ Scan &amp; lock</button>
+          <button class="btn" id="clearFocus" disabled>Clear lock</button>
+        </div>
+        <label class="chk"><input type="checkbox" id="focusOnlyChk" checked> hide everything else</label>
+        <div class="readout" id="focusReadout"></div>
+      </div>
+    </details>
+
+    <details class="panel" open>
+      <summary>Display</summary>
+      <div class="panel-body">
+        <label class="field">
+          <span>Footage opacity <b id="opacityVal">100%</b></span>
+          <input type="range" id="opacityRange" min="0" max="1" step="0.05" value="1">
+        </label>
+        <div class="chk-grid">
+          <label class="chk"><input type="checkbox" id="skelChk" checked> skeleton</label>
+          <label class="chk"><input type="checkbox" id="pointsChk" checked> points</label>
+          <label class="chk"><input type="checkbox" id="labelsChk"> labels</label>
+          <label class="chk"><input type="checkbox" id="anglesChk"> angle arcs</label>
+        </div>
+        <label class="field">
+          <span>Onion skin <b id="strobeVal">off</b></span>
+          <input type="range" id="strobeRange" min="0" max="12" step="1" value="0">
+        </label>
+        <div class="sub">Body parts</div>
+        <div class="chk-grid" id="groupList"></div>
+        <div class="row">
+          <label class="field tight">
+            <span>Point size</span>
+            <input type="range" id="pointScale" min="0.4" max="2.5" step="0.1" value="1">
+          </label>
+          <label class="field tight">
+            <span>Line weight</span>
+            <input type="range" id="lineScale" min="0.4" max="2.5" step="0.1" value="1">
+          </label>
+        </div>
+      </div>
+    </details>
+
+    <details class="panel" open>
+      <summary>Motion trails</summary>
+      <div class="panel-body">
+        <p class="note">Click any point on the stage to trail it.</p>
+        <label class="field">
+          <span>Trail length</span>
+          <select id="trailLenSel">
+            <option value="0.25">0.25 s</option>
+            <option value="0.5">0.5 s</option>
+            <option value="1">1 s</option>
+            <option value="2">2 s</option>
+            <option value="Infinity" selected>whole trim</option>
+          </select>
+        </label>
+        <label class="chk"><input type="checkbox" id="trailDotsChk" checked> show sample dots (spacing = speed)</label>
+        <div class="chips" id="trailChips"></div>
+      </div>
+    </details>
+
+    <details class="panel" open>
+      <summary>Joint angles</summary>
+      <div class="panel-body">
+        <label class="field">
+          <span>Measured in</span>
+          <select id="angleModeSel">
+            <option value="image" selected>The image — what you see</option>
+            <option value="world">3D world — depth aware</option>
+          </select>
+        </label>
+        <p class="note" id="angleModeNote">Matches the arc drawn on the stage.</p>
+        <div class="chips" id="angleChips"></div>
+        <div class="readout" id="angleReadout"></div>
+        <canvas class="chart" id="angleChart"></canvas>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary>Export</summary>
+      <div class="panel-body">
+        <p class="note">Exports cover the trimmed range only.</p>
+        <div class="row wrap">
+          <button class="btn sm" id="exportJson" disabled>Track JSON</button>
+          <button class="btn sm" id="exportCsv" disabled>Landmarks CSV</button>
+          <button class="btn sm" id="exportAngles" disabled>Angles CSV</button>
+          <button class="btn sm" id="exportPng" disabled>Frame PNG</button>
+        </div>
+        <div class="sub">Video</div>
+        <label class="chk"><input type="checkbox" id="exportOverlayChk"> include the skeleton overlay</label>
+        <div class="row wrap">
+          <button class="btn sm primary" id="exportVideo" disabled>Export cropped video</button>
+          <button class="btn sm ghost" id="cancelExportVideo" hidden>Cancel</button>
+        </div>
+        <p class="note" id="exportVideoNote">Writes the crop region over the trimmed range as a WebM, at source timing. Plays through once to record, so it takes as long as the trimmed clip.</p>
+      </div>
+    </details>
+
+    <div class="shortcuts">
+      <b>space</b> play · <b>←/→</b> step · <b>I/O</b> trim · <b>R</b> reset · <b>S</b> scan · <b>esc</b> cancel
+    </div>
+  </aside>
+</main>
+
+<!-- Media elements are created per clip by ClipView, off-stage but renderable
+     (not display:none) so browsers keep painting frames we can read. -->
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

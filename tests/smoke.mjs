@@ -520,7 +520,22 @@ async function main() {
   await makeClip('https://storage.googleapis.com/mediapipe-assets/right_hands.jpg', '__hands');
   await cdp.eval(`window.motionStudio.loadVideoFile(window.__hands)`);
   await cdp.eval(`window.motionStudio.idle()`);
-  await sleep(400); // let the clip repaint before sampling pixels
+
+  // Judge the clip by its best frame, not whichever one the playhead sits on:
+  // the first frame of a canvas recording can be blank or half-painted
+  // depending on the platform's encoder (it was on Linux CI), and one empty
+  // frame says nothing about whether the finger pipeline works.
+  const handsSeen = await cdp.eval(`(() => {
+    const ms = window.motionStudio;
+    const frames = ms.active.track.frames;
+    const count = (f) => (f.hands ? Object.values(f.hands).reduce((n, h) => n + h.length, 0) : 0);
+    let best = 0;
+    frames.forEach((f, i) => { if (count(f) > count(frames[best])) best = i; });
+    ms.setFrame(best);
+    return { best, withHands: frames.filter((f) => count(f) > 0).length, total: frames.length };
+  })()`);
+  console.log(`         (hands found in ${handsSeen.withHands}/${handsSeen.total} frames; checking frame ${handsSeen.best + 1})`);
+  await sleep(600); // let the seek land and the clip repaint before sampling pixels
 
   const handImage = await cdp.eval(`(async () => {
     const SK = await import('/js/skeleton.js');
@@ -540,7 +555,7 @@ async function main() {
     };
   })()`);
   check('hands detected in a real clip', handImage.count >= 21,
-    `${handImage.sides.join(' + ') || 'none'}, ${handImage.count} points`);
+    `${handImage.sides.join(' + ') || 'none'}, ${handImage.count} points; hands in ${handsSeen.withHands}/${handsSeen.total} frames`);
   check('hand points survive the visibility filter',
     handImage.passFilter === handImage.count && handImage.count > 0,
     `${handImage.passFilter}/${handImage.count} above ${handImage.threshold} (min visibility ${handImage.minVisibility})`);

@@ -34,8 +34,9 @@ skeleton overlay on. [Full clip (MP4)](docs/demo.mp4). Footage:
   subjects.
 - **Export** — landmark CSV, angle CSV, track JSON, a PNG of the frame, or the
   trimmed clip as video with the skeleton drawn on.
-- **Private by design** — models run on-device via WebGPU/WebAssembly; a test
-  proves analysis makes zero network requests.
+- **Private by design** — models run on-device via WebGPU/WebAssembly,
+  MediaPipe's built-in usage logging is blocked, and a test proves analysis
+  makes zero network requests.
 
 ## Run it locally
 

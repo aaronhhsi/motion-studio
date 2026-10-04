@@ -267,10 +267,20 @@ working with the network off. `npm run vendor` downloads them into `./vendor` so
 it always does — then set `USE_VENDORED = true` in config.js.
 
 This is enforced, not just asserted: `npm run test:network` records every
-request the page makes, then analyses a clip frame by frame (100+ detections)
-and fails if inference produced a single request. Current
-result: 21 requests at startup, all GET, zero bytes of request body, and **zero**
-requests thereafter.
+request the page makes, analyses a clip frame by frame (100+ detections), then
+waits out a further 70 seconds and fails if anything produced a single request.
+Current result: 22 requests at startup, all GET, zero bytes of request body, and
+**zero** requests thereafter.
+
+The wait is there because of what the test caught. MediaPipe Tasks 1.0 added a
+usage logger to every task: it counts which task ran and how fast, and POSTs
+that to `odml.pa.googleapis.com/v1/log` every 60 seconds. No image data — but a
+request nobody asked for, and the library has no switch to turn it off. The
+first version of this test never saw it on a fast GPU, because the analysis
+finished inside the minute; on CI's CPU-only runner it did not, and the test
+failed. [js/no-telemetry.js](../js/no-telemetry.js) now refuses that endpoint
+before it reaches the network, and the logger, treating the failure as fatal,
+stops itself.
 
 ## Notes on the numbers
 
@@ -358,6 +368,7 @@ js/
   sides.js          detecting and repairing left/right label swaps
   export-video.js   writing the crop + trim back out as a video file
   landmarker.js     model wrapper: picks a backend, GPU→CPU fallback, timestamps
+  no-telemetry.js   refuses MediaPipe's built-in usage logging
   yolo.js           the YOLO backend — ONNX Runtime, letterboxing, COCO→BlazePose
   analyze.js        seek-stepping video pass
   track.js          the recorded motion + derived series (smoothing, speed, angles)

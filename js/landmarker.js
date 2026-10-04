@@ -7,6 +7,7 @@
 // contexts towards the browser's ~16-context cap on the rest.
 
 import { VISION_BUNDLE_URL, WASM_BASE_URL, MODELS, HAND_MODEL, DEFAULTS } from './config.js';
+import { blockTelemetry } from './no-telemetry.js';
 import {
   ensureYolo, detectYolo, releaseYolo, isYoloModel, currentProvider, yoloFallbackToWasm, hasYolo,
   PROVIDED_IDS,
@@ -40,6 +41,7 @@ export function getModule() {
 
 async function loadVision() {
   if (vision) return vision;
+  blockTelemetry(); // MediaPipe 1.x phones home with usage stats; see no-telemetry.js
   visionModule = await import(/* @vite-ignore */ VISION_BUNDLE_URL);
   vision = await visionModule.FilesetResolver.forVisionTasks(WASM_BASE_URL);
   return vision;

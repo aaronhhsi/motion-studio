@@ -236,7 +236,7 @@ async function main() {
   // A photo panned across a canvas and recorded is a real video with a real
   // person in it — the only way to exercise the video path against real
   // landmarks without shipping footage. Same-origin blob URL: no canvas taint.
-  const makeClip = (url, name) => cdp.eval(`(async () => {
+  const recordClip = (url, name) => cdp.eval(`(async () => {
     const res = await fetch(${JSON.stringify(url)});
     const src = URL.createObjectURL(await res.blob());
     const img = new Image();
@@ -273,6 +273,14 @@ async function main() {
     window[${JSON.stringify(name)}] = new File([blob], ${JSON.stringify(name)} + '.webm', { type: 'video/webm' });
     return blob.size;
   })()`);
+  // MediaRecorder occasionally hands back an empty recording in headless
+  // Chrome (seen locally, four runs in a row, then not again). That is the
+  // test's scaffolding failing, not the app, so try again before giving up.
+  const makeClip = async (url, name) => {
+    let bytes = 0;
+    for (let attempt = 0; attempt < 3 && bytes === 0; attempt++) bytes = await recordClip(url, name);
+    return bytes;
+  };
 
   // --- 2. a video of a real person produces real landmarks -----------------
   const clipBytes = await makeClip('https://storage.googleapis.com/mediapipe-assets/pose.jpg', '__clip');

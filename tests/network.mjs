@@ -171,6 +171,11 @@ async function main() {
 
   const frames = await evaluate(`window.motionStudio.clipA.track?.frames.filter((f) => f.pose).length ?? 0`);
 
+  // Libraries batch telemetry on a timer — MediaPipe 1.x flushes usage stats
+  // every 60s — so a fast machine can finish analysing before anything is sent
+  // and pass by luck. Sit out a full interval before counting.
+  await sleep(70000);
+
   // Exclude the test's own photo fetch, and blob:/data: URLs — those are
   // in-memory references to local data and never touch the network.
   const during = requests.slice(mark).filter((r) =>
